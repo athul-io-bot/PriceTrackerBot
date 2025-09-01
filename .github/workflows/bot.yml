@@ -30,4 +30,4 @@ jobs:
   DATABASE: ${{ secrets.DATABASE }}
   COLLECTION: ${{ secrets.COLLECTION }}
   PRODUCT: ${{ secrets.PRODUCT }}
-        run: python main.py
+        run: main.py
