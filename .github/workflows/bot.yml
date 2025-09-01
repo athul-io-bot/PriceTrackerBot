@@ -27,7 +27,7 @@ jobs:
   API_ID: ${{ secrets.API_ID }}
   API_HASH: ${{ secrets.API_HASH }}
   MONGO_URI: ${{ secrets.MONGO_URI }}
+  DATABASE: ${{ secrets.DATABASE }}
   COLLECTION: ${{ secrets.COLLECTION }}
   PRODUCT: ${{ secrets.PRODUCT }}
-  DATABASE: ${{ secrets.DATABASE }}
         run: python main.py
