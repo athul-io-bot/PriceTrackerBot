@@ -3,8 +3,15 @@ from pymongo import MongoClient
 import os
 from scraper import scrape
 from dotenv import load_dotenv
+from database import compare_prices
 
 load_dotenv()
+
+# Add environment variable validation
+required_env_vars = ["MONGO_URI", "DATABASE", "COLLECTION", "PRODUCTS"]
+for var in required_env_vars:
+    if not os.getenv(var):
+        raise ValueError(f"Environment variable {var} is not set")
 
 dbclient = MongoClient(os.getenv("MONGO_URI"))
 database = dbclient[os.getenv("DATABASE")]
@@ -16,7 +23,7 @@ async def check_prices(app):
     for product in PRODUCTS.find():
         try:
             _, current_price = await scrape(product["url"])
-            time.sleep(1)  # Rate limiting
+            time.sleep(1)
             
             if current_price is not None:
                 # Get current values with defaults
@@ -44,44 +51,34 @@ async def check_prices(app):
     
     print("Completed price checking")
     
-    # Send notifications for changed products
+    # Send notifications
     changed_products = await compare_prices()
     for changed_product in changed_products:
         cursor = collection.find({"product_id": changed_product})
         users = list(cursor)
         for user in users:
             try:
-                product = PRODUCTS.find_one({"_id": user.get("product_id")})
-                if product and product.get("previous_price", 0) > 0:
-                    percentage_change = (
-                        (product["price"] - product["previous_price"])
-                        / product["previous_price"]
-                    ) * 100
-                else:
-                    percentage_change = 0
-                
-                text = (
-                    f"🎉 Good news! The price of {product['product_name']} has changed.\n"
-                    f"   - Previous Price: ₹{product['previous_price']:.2f}\n"
-                    f"   - Current Price: ₹{product['price']:.2f}\n"
-                    f"   - Percentage Change: {percentage_change:.2f}%\n"
-                    f"   - [Check it out here]({product['url']})"
-                )
-                await app.send_message(
-                    chat_id=user.get("user_id"), 
-                    text=text, 
-                    disable_web_page_preview=True
-                )
+                product_data = PRODUCTS.find_one({"_id": user.get("product_id")})
+                if product_data:
+                    previous_price = product_data.get("previous_price", 0)
+                    if previous_price > 0:
+                        percentage_change = (
+                            (product_data["price"] - previous_price) / previous_price
+                        ) * 100
+                    else:
+                        percentage_change = 0
+                    
+                    text = (
+                        f"🎉 Price update for {product_data['product_name']}!\n"
+                        f"   - Previous: ₹{previous_price:.2f}\n"
+                        f"   - Current: ₹{product_data['price']:.2f}\n"
+                        f"   - Change: {percentage_change:.2f}%\n"
+                        f"   - [View product]({product_data['url']})"
+                    )
+                    await app.send_message(
+                        chat_id=user.get("user_id"), 
+                        text=text, 
+                        disable_web_page_preview=True
+                    )
             except Exception as e:
-                print(f"Error sending message to user {user.get('user_id')}: {str(e)}")
-                continue
-
-async def compare_prices():
-    print("Comparing Prices...")
-    product_with_changes = []
-    for product in PRODUCTS.find():
-        current_price = product.get("price")
-        previous_price = product.get("previous_price")
-        if current_price != previous_price:
-            product_with_changes.append(product.get("_id"))
-    return product_with_changes
+                print(f"Error sending message: {str(e)}")
